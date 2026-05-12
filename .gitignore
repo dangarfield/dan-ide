@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Runtime data (per-project, not source)
+.dan-ide/sessions/
+.dan-ide/screenshots/
+.dan-ide/memory/
+.dan-ide/audit.jsonl
+.dan-ide/swarms/
+.dan-ide/tasks/
+.dan-ide/CLAUDE.md
+
+# Test fixtures
+test-project/
+
+# Research docs (large PDFs)
+research/
+
+# OS files
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

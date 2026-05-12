@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; style-src 'self' 'unsafe-inline' file:; script-src 'self' 'unsafe-eval' file:; img-src 'self' file: data:; worker-src blob:; frame-src *;">
+  <title>Dan IDE</title>
+  <link rel="stylesheet" href="vendor/xterm.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sliding drawer (hidden by default) -->
+    <aside id="drawer" class="closed">
+      <div class="drawer-header">
+        <h2>Projects & Agents</h2>
+        <button id="btn-close-drawer" title="Close">&times;</button>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-header">
+          <span>Projects</span>
+          <button id="btn-add-project" title="Add Project">+</button>
+        </div>
+        <div id="project-list"></div>
+      </div>
+      <div class="drawer-section">
+        <div class="drawer-section-header">
+          <span>Agents</span>
+        </div>
+        <div id="session-list"></div>
+      </div>
+    </aside>
+    <div id="drawer-overlay" class="hidden"></div>
+
+    <!-- Main content -->
+    <main id="main-area">
+      <div id="top-bar">
+        <div id="top-bar-left">
+          <button id="btn-workspace" title="Switch workspace">No project</button>
+          <div id="panel-toggle">
+            <button class="panel-btn" data-panel="agents" title="Toggle Agents panel">Agents</button>
+            <button class="panel-btn" data-panel="swarm" title="Toggle Swarm panel">Swarm</button>
+            <button class="panel-btn" data-panel="files" title="Toggle Files panel">Files</button>
+            <button class="panel-btn" data-panel="browser" title="Toggle Browser panel">Browser</button>
+          </div>
+          <div id="session-tabs"></div>
+        </div>
+        <div id="top-bar-right">
+          <select id="view-mode">
+            <option value="single">Single</option>
+            <option value="double">Double</option>
+            <option value="project">All (Project)</option>
+            <option value="all">All (Global)</option>
+          </select>
+          <select id="cli-select">
+            <option value="claude">Claude</option>
+            <option value="kiro">Kiro</option>
+            <option value="aider">Aider</option>
+            <option value="shell">Shell</option>
+          </select>
+          <select id="role-select">
+            <option value="">No role</option>
+            <option value="builder">Builder</option>
+            <option value="reviewer">Reviewer</option>
+            <option value="researcher">Researcher</option>
+            <option value="coordinator">Coordinator</option>
+          </select>
+          <button id="btn-run-tests" title="Run Tests">Run Tests</button>
+          <button id="btn-new-session">+ Agent</button>
+          <button id="btn-new-swarm">+ Swarm</button>
+        </div>
+      </div>
+      <!-- 3-panel layout with resize handles -->
+      <div id="panels-container">
+        <!-- Agents panel (terminals) -->
+        <div id="panel-agents" class="panel hidden">
+          <div id="terminal-container">
+            <div id="no-session-msg">
+              <p>Open the drawer to add a project, then start an agent.</p>
+            </div>
+          </div>
+        </div>
+        <div class="resize-handle hidden" data-left="agents" data-right="swarm"></div>
+        <!-- Swarm panel (messages + tasks + canvas + audit) -->
+        <div id="panel-swarm" class="panel hidden">
+          <div id="swarm-panel">
+            <div id="swarm-tabs-bar">
+              <button class="msg-tab active" data-tab="messages">Messages</button>
+              <button class="msg-tab" data-tab="tasks">Tasks</button>
+              <button class="msg-tab" data-tab="canvas-tab">Canvas</button>
+              <button class="msg-tab" data-tab="audit">Audit</button>
+              <button id="swarm-clear-btn" title="Clear messages and tasks">&#10005; Clear</button>
+            </div>
+            <div id="messages-content" class="msg-tab-content active">
+              <div id="messages-list"></div>
+            </div>
+            <div id="tasks-content" class="msg-tab-content">
+              <div id="tasks-list"></div>
+            </div>
+            <div id="canvas-tab-content" class="msg-tab-content">
+              <div id="canvas-panel">
+                <canvas id="agent-canvas"></canvas>
+              </div>
+            </div>
+            <div id="audit-content" class="msg-tab-content">
+              <div id="audit-timeline"></div>
+            </div>
+          </div>
+        </div>
+        <div class="resize-handle hidden" data-left="swarm" data-right="files"></div>
+        <!-- Files panel (tree + editor) -->
+        <div id="panel-files" class="panel hidden">
+          <div id="files-panel">
+            <div id="file-tree-wrapper">
+              <input type="text" id="file-tree-search" placeholder="Filter files..." autocomplete="off">
+              <div id="file-tree"></div>
+            </div>
+            <div id="editor-area">
+              <div id="editor-tabs"></div>
+              <div id="monaco-container"></div>
+            </div>
+          </div>
+        </div>
+        <div class="resize-handle hidden" data-left="files" data-right="browser"></div>
+        <!-- Browser panel -->
+        <div id="panel-browser" class="panel hidden">
+          <div id="browser-panel">
+            <div id="browser-toolbar">
+              <button id="browser-back" title="Back">&larr;</button>
+              <button id="browser-forward" title="Forward">&rarr;</button>
+              <button id="browser-reload" title="Reload">&#x21bb;</button>
+              <input type="text" id="browser-url" placeholder="URL... (Enter to navigate)" autocomplete="off">
+              <div class="browser-tools-divider"></div>
+              <button id="browser-inspect" title="Select Element — hover to highlight, click to select" class="browser-tool-btn">&#9673; Select Element</button>
+              <button id="browser-annotate" title="Draw on the page" class="browser-tool-btn">&#9998; Draw</button>
+              <button id="browser-capture" title="Capture screenshot (full page or drag a region)" class="browser-tool-btn">&#9634; Capture</button>
+              <button id="browser-clear" title="Clear annotations and selections" class="browser-tool-btn">&#10005; Clear</button>
+            </div>
+            <div id="browser-content">
+              <webview id="browser-webview" src="about:blank" style="width:100%;height:100%;" allowpopups></webview>
+              <canvas id="browser-overlay" class="browser-overlay hidden"></canvas>
+              <div id="browser-selection-box" class="hidden"></div>
+            </div>
+            <div id="browser-agent-bar" class="hidden">
+              <div id="browser-selected-info">
+                <span id="browser-selected-selector" title="CSS Selector of selected element"></span>
+                <button id="browser-selected-copy" title="Copy selector">&#128203;</button>
+              </div>
+              <div id="browser-selected-preview"></div>
+              <textarea id="browser-agent-prompt" placeholder="Describe what you want the agent to do with this element..." rows="2" autocomplete="off"></textarea>
+              <div id="browser-agent-actions">
+                <select id="browser-agent-target"></select>
+                <button id="browser-agent-send">Send to Agent</button>
+                <button id="browser-agent-cancel">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Status bar -->
+      <div id="status-bar">
+        <span id="status-project">No project</span>
+        <span id="status-agents">0 agents</span>
+        <span id="status-tests"></span>
+        <span id="status-memory"></span>
+        <span id="status-quick"></span>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <!-- Project switcher overlay -->
+  <div id="project-switcher" class="modal hidden">
+    <div class="modal-content switcher-content">
+      <input type="text" id="switcher-input" placeholder="Switch project..." autocomplete="off">
+      <div id="switcher-list"></div>
+    </div>
+  </div>
+
+  <!-- Swarm modal -->
+  <div id="swarm-modal" class="modal hidden">
+    <div class="modal-content swarm-modal-content">
+      <h3>Launch Swarm</h3>
+      <label class="edit-label">Mission</label>
+      <textarea id="swarm-mission" rows="3" placeholder="Describe the goal for this swarm..."></textarea>
+      <label class="edit-label">Agents</label>
+      <div id="swarm-agents-list"></div>
+      <button id="swarm-add-agent" class="btn-secondary">+ Add Agent</button>
+      <div class="modal-actions">
+        <button id="swarm-cancel">Cancel</button>
+        <button id="swarm-launch">Launch Swarm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit modal (name + color) -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="edit-modal-title">Edit</h3>
+      <label class="edit-label">Name</label>
+      <input type="text" id="edit-name-input" autocomplete="off">
+      <label class="edit-label">Color</label>
+      <div id="edit-color-swatches"></div>
+      <div class="modal-actions">
+        <button id="edit-cancel">Cancel</button>
+        <button id="edit-confirm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
+  <script src="vendor/addon-web-links.js"></script>
+  <script src="editor.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

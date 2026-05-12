@@ -1,0 +1,7 @@
+# Dan IDE project config
+default_cli: claude
+allowed_clis:
+  - claude
+  - kiro
+  - aider
+  - shell

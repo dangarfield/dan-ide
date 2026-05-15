@@ -4,13 +4,10 @@ dist/
 *.log
 
 # Runtime data (per-project, not source)
-.dan-ide/sessions/
-.dan-ide/screenshots/
-.dan-ide/memory/
-.dan-ide/audit.jsonl
-.dan-ide/swarms/
-.dan-ide/tasks/
-.dan-ide/CLAUDE.md
+.dan-ide/
+
+# UUID session/project directories (runtime artifacts)
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*/
 
 # Test fixtures
 test-project/

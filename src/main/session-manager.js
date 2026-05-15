@@ -9,7 +9,7 @@ const GLOBAL_STATE_DIR = path.join(os.homedir(), '.dan-ide');
 const SESSIONS_STATE_FILE = path.join(GLOBAL_STATE_DIR, 'sessions.json');
 
 class Session {
-  constructor({ id, name, projectId, projectPath, cli, cliKey, args, env, historyFile, claudeSessionId }) {
+  constructor({ id, name, projectId, projectPath, cli, cliKey, args, env, historyFile, claudeSessionId, ephemeral }) {
     this.id = id;
     this.name = name;
     this.projectId = projectId;
@@ -21,6 +21,7 @@ class Session {
     this.status = 'starting';
     this.historyFile = historyFile;
     this.claudeSessionId = claudeSessionId;
+    this.ephemeral = !!ephemeral;
     this._dataCallbacks = [];
     this._exitCallbacks = [];
     this._historyStream = null;
@@ -28,6 +29,24 @@ class Session {
   }
 
   _spawn() {
+    // Kill any orphaned process still holding this Claude session ID
+    if (this.claudeSessionId && this.cliKey === 'claude') {
+      try {
+        const { execSync } = require('child_process');
+        // Match the exact session ID anywhere in the process args
+        const result = execSync(`pgrep -f "${this.claudeSessionId}" 2>/dev/null`, { encoding: 'utf8' }).trim();
+        if (result) {
+          for (const pidStr of result.split('\n')) {
+            const pid = parseInt(pidStr);
+            if (pid && pid !== process.pid) {
+              try { process.kill(pid, 'SIGKILL'); } catch {}
+            }
+          }
+          execSync('sleep 1');
+        }
+      } catch {}
+    }
+
     const shell = this.cli;
     const args = this.args;
 
@@ -62,8 +81,8 @@ class Session {
 
     this.pty = pty.spawn(shell, args, {
       name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
+      cols: 80,
+      rows: 24,
       cwd: this.projectPath,
       env,
     });
@@ -148,7 +167,12 @@ class Session {
 
   stop() {
     if (this.pty && this.status === 'running') {
-      this.pty.kill();
+      this.pty.kill('SIGTERM');
+      // Force kill after a short grace period
+      const pid = this.pty.pid;
+      setTimeout(() => {
+        try { process.kill(pid, 'SIGKILL'); } catch {}
+      }, 1000);
       this.status = 'stopped';
     }
     if (this._historyStream) {
@@ -179,16 +203,22 @@ class SessionManager {
     fs.mkdirSync(GLOBAL_STATE_DIR, { recursive: true });
   }
 
-  create({ name, projectId, projectPath, cli, role, resume, claudeSessionId }) {
+  create({ name, projectId, projectPath, cli, role, resume, claudeSessionId, systemPrompt, ephemeral }) {
     const id = crypto.randomUUID();
     // Determine the canonical cliKey (handle case where cli is already a resolved path)
     const cliKey = this._toCliKey(cli);
     // For Claude, assign a stable session ID so we can resume the correct conversation
-    let assignedClaudeSessionId = claudeSessionId;
-    if (cliKey === 'claude' && !assignedClaudeSessionId) {
-      assignedClaudeSessionId = crypto.randomUUID();
+    // Skip session ID for direct system prompt sessions (they don't need resume support)
+    let assignedClaudeSessionId = null;
+    if (!systemPrompt) {
+      assignedClaudeSessionId = claudeSessionId;
+      if (cliKey === 'claude' && !assignedClaudeSessionId) {
+        assignedClaudeSessionId = crypto.randomUUID();
+      }
     }
-    const { args, env } = this._buildCliArgs(cliKey, projectPath, projectId, role, resume, assignedClaudeSessionId);
+    const { args, env } = systemPrompt
+      ? this._buildDirectArgs(cliKey, projectPath, systemPrompt, assignedClaudeSessionId)
+      : this._buildCliArgs(cliKey, projectPath, projectId, role, resume, assignedClaudeSessionId);
     // Ensure shared memory files exist before spawning
     this._ensureSharedMemoryFiles(projectPath, projectId);
     const { workspaceSessionsDir } = require('./paths');
@@ -207,6 +237,7 @@ class SessionManager {
       env,
       historyFile,
       claudeSessionId: assignedClaudeSessionId,
+      ephemeral: !!ephemeral,
     });
 
     this.sessions.set(id, session);
@@ -237,6 +268,15 @@ class SessionManager {
     return map[cli] || cli;
   }
 
+  _buildDirectArgs(cli, projectPath, systemPrompt, claudeSessionId) {
+    let args = [];
+    let env = {};
+    if (cli === 'claude') {
+      args = ['--dangerously-skip-permissions', '--system-prompt', systemPrompt];
+    }
+    return { args, env };
+  }
+
   _buildCliArgs(cli, projectPath, projectId, role, resume, claudeSessionId) {
     const { workspaceMemoryDir } = require('./paths');
     const memoryPath = projectId ? workspaceMemoryDir(projectId) : path.join(projectPath, '.dan-ide', 'memory');
@@ -260,6 +300,9 @@ class SessionManager {
         args = ['--dangerously-skip-permissions'];
         if (claudeSessionId) {
           args.push('--session-id', claudeSessionId);
+          if (resume) {
+            args.push('--resume');
+          }
         }
         if (role) {
           args.push('--system-prompt', this._buildRolePrompt(role, memoryPath));
@@ -398,17 +441,19 @@ class SessionManager {
 
   // Persist session metadata to disk
   _saveState() {
-    const state = Array.from(this.sessions.values()).map((s) => ({
-      id: s.id,
-      name: s.name,
-      projectId: s.projectId,
-      projectPath: s.projectPath,
-      cli: s.cli,
-      cliKey: s.cliKey,
-      status: s.status,
-      historyFile: s.historyFile,
-      claudeSessionId: s.claudeSessionId,
-    }));
+    const state = Array.from(this.sessions.values())
+      .filter((s) => !s.ephemeral)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        projectId: s.projectId,
+        projectPath: s.projectPath,
+        cli: s.cli,
+        cliKey: s.cliKey,
+        status: s.status,
+        historyFile: s.historyFile,
+        claudeSessionId: s.claudeSessionId,
+      }));
     fs.writeFileSync(SESSIONS_STATE_FILE, JSON.stringify(state, null, 2));
   }
 

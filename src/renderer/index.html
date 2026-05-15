@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; style-src 'self' 'unsafe-inline' file:; script-src 'self' 'unsafe-eval' file:; img-src 'self' file: data:; worker-src blob:; frame-src *;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; style-src 'self' 'unsafe-inline' file:; script-src 'self' 'unsafe-eval' file:; img-src 'self' file: data:; worker-src blob:; frame-src *; media-src 'self' mediastream: blob:;">
   <title>Dan IDE</title>
   <link rel="stylesheet" href="vendor/xterm.css">
   <link rel="stylesheet" href="styles.css">
@@ -41,6 +41,7 @@
             <button class="panel-btn" data-panel="swarm" title="Toggle Swarm panel">Swarm</button>
             <button class="panel-btn" data-panel="files" title="Toggle Files panel">Files</button>
             <button class="panel-btn" data-panel="browser" title="Toggle Browser panel">Browser</button>
+            <button class="panel-btn" data-panel="prototype" title="Toggle Live Prototype panel">Prototype</button>
           </div>
           <div id="session-tabs"></div>
         </div>
@@ -154,6 +155,62 @@
             </div>
           </div>
         </div>
+        <div class="resize-handle hidden" data-left="browser" data-right="prototype"></div>
+        <!-- Live Prototype panel -->
+        <div id="panel-prototype" class="panel hidden">
+          <div id="prototype-panel">
+            <!-- Tab bar -->
+            <div id="prototype-tabs">
+              <button class="proto-tab active" data-tab="listening">Listening</button>
+            </div>
+            <!-- Listening tab content -->
+            <div id="prototype-tab-listening" class="proto-tab-content active">
+              <div id="prototype-toolbar">
+                <select id="prototype-mode-select" class="proto-mode-select">
+                  <option value="microphone">Microphone</option>
+                  <option value="system-audio">System Audio (Teams/Meet/Zoom)</option>
+                  <option value="manual">Manual / Paste</option>
+                </select>
+                <button id="prototype-listen-btn" class="proto-toolbar-btn">Start Listening</button>
+                <span id="prototype-status-label" class="proto-status-label">Idle</span>
+              </div>
+              <div id="prototype-columns">
+                <!-- Left column: Transcript -->
+                <div id="prototype-col-transcript">
+                  <div class="proto-col-header">Transcript</div>
+                  <div id="prototype-transcript-list"></div>
+                  <div id="prototype-feed-bar">
+                    <input type="text" id="prototype-feed-input" placeholder="Type or paste transcript..." autocomplete="off">
+                    <button id="prototype-feed-send">Feed</button>
+                  </div>
+                </div>
+                <!-- Right column: Thinking -->
+                <div id="prototype-col-thinking">
+                  <div class="proto-col-header">Thinking</div>
+                  <div id="prototype-thinking-list"></div>
+                  <div id="prototype-answers-bar" class="hidden">
+                    <div class="proto-answers-label">Answer questions:</div>
+                    <input type="text" id="prototype-answers-input" placeholder="Type answers/clarifications to help the thinker..." autocomplete="off">
+                    <button id="prototype-answers-send">Send</button>
+                  </div>
+                </div>
+              </div>
+              <!-- Proposal area (appears when thinking reaches confidence) -->
+              <div id="prototype-proposal-area" class="hidden">
+                <div id="prototype-proposal-header">Prototype Proposal</div>
+                <input type="text" id="prototype-proposal-name" placeholder="Prototype name..." autocomplete="off">
+                <textarea id="prototype-proposal-desc" rows="10" placeholder="Prototype description — edit before confirming..."></textarea>
+                <div id="prototype-attachments"></div>
+                <div id="prototype-proposal-actions">
+                  <button id="prototype-attach-doc" class="proto-toolbar-btn">+ Doc</button>
+                  <button id="prototype-attach-screenshot" class="proto-toolbar-btn">+ Screenshot</button>
+                  <button id="prototype-dismiss-btn" class="proto-toolbar-btn proto-dismiss">Dismiss</button>
+                  <button id="prototype-build-btn" class="proto-toolbar-btn proto-build">Build This</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- Status bar -->
       <div id="status-bar">
@@ -214,6 +271,7 @@
   <script src="app.js"></script>
   <script src="swarm.js"></script>
   <script src="browser.js"></script>
+  <script src="live-prototype.js"></script>
   <script src="boot.js"></script>
 </body>
 </html>

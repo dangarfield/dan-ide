@@ -4,8 +4,10 @@
   "description": "Local agentic development environment for managing AI coding sessions",
   "main": "src/main/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev"
+    "start": "npm run sign && electron .",
+    "dev": "npm run sign && electron . --dev",
+    "test": "echo \"No tests configured\" && exit 0",
+    "sign": "codesign --force --deep --sign - --entitlements entitlements.plist node_modules/electron/dist/Electron.app 2>/dev/null || true"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -13,7 +15,8 @@
     "@xterm/xterm": "^5.5.0",
     "electron": "^33.0.0",
     "monaco-editor": "^0.55.1",
-    "node-pty": "^1.0.0"
+    "node-pty": "^1.0.0",
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4"

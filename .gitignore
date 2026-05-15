@@ -6,6 +6,11 @@ dist/
 # Runtime data (per-project, not source)
 .dan-ide/
 
+# Claude Code / MCP runtime
+.claude/
+.claude-flow/
+.mcp.json
+
 # UUID session/project directories (runtime artifacts)
 [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*/
 

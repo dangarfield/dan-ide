@@ -103,4 +103,74 @@ contextBridge.exposeInMainWorld('api', {
 
   // Dialogs
   openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
+  openFileDialog: () => ipcRenderer.invoke('dialog:openFile'),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+
+  // Desktop capturer (for system audio)
+  getDesktopSources: () => ipcRenderer.invoke('desktop:getSources'),
+
+  // Live Prototype
+  livePrototypeStart: (mode) => ipcRenderer.invoke('livePrototype:start', mode),
+  livePrototypeStop: () => ipcRenderer.invoke('livePrototype:stop'),
+  livePrototypeFeed: (text, speaker) => ipcRenderer.invoke('livePrototype:feed', { text, speaker }),
+  livePrototypeForce: (description) => ipcRenderer.invoke('livePrototype:forceDetect', description),
+  livePrototypeConfirm: (editedDescription, editedName) => ipcRenderer.invoke('livePrototype:confirm', { editedDescription, editedName }),
+  livePrototypeDismiss: () => ipcRenderer.invoke('livePrototype:dismiss'),
+  livePrototypeStopBuild: () => ipcRenderer.invoke('livePrototype:stopBuild'),
+  livePrototypeAttach: (attachment) => ipcRenderer.invoke('livePrototype:attach', attachment),
+  livePrototypeRemoveAttachment: (index) => ipcRenderer.invoke('livePrototype:removeAttachment', index),
+  livePrototypeStatus: () => ipcRenderer.invoke('livePrototype:status'),
+  livePrototypeGetThoughts: () => ipcRenderer.invoke('livePrototype:getThoughts'),
+  livePrototypeSendAudio: (buffer) => ipcRenderer.invoke('livePrototype:sendAudio', buffer),
+
+  onLivePrototypeState: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:state', listener);
+    return () => ipcRenderer.removeListener('livePrototype:state', listener);
+  },
+  onLivePrototypeTranscript: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:transcript', listener);
+    return () => ipcRenderer.removeListener('livePrototype:transcript', listener);
+  },
+  onLivePrototypeProposal: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:proposal', listener);
+    return () => ipcRenderer.removeListener('livePrototype:proposal', listener);
+  },
+  onLivePrototypeServerReady: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:serverReady', listener);
+    return () => ipcRenderer.removeListener('livePrototype:serverReady', listener);
+  },
+  onLivePrototypeAttachments: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:attachments', listener);
+    return () => ipcRenderer.removeListener('livePrototype:attachments', listener);
+  },
+  onLivePrototypeError: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:error', listener);
+    return () => ipcRenderer.removeListener('livePrototype:error', listener);
+  },
+  onLivePrototypePrototypeStatus: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:prototypeStatus', listener);
+    return () => ipcRenderer.removeListener('livePrototype:prototypeStatus', listener);
+  },
+  onLivePrototypeSubagent: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:subagent', listener);
+    return () => ipcRenderer.removeListener('livePrototype:subagent', listener);
+  },
+  onLivePrototypeThought: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:thought', listener);
+    return () => ipcRenderer.removeListener('livePrototype:thought', listener);
+  },
+  onLivePrototypeThinkerSession: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:thinkerSession', listener);
+    return () => ipcRenderer.removeListener('livePrototype:thinkerSession', listener);
+  },
 });

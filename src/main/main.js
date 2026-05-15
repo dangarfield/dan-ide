@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, systemPreferences, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -17,6 +17,7 @@ const { SearchManager } = require('./search-manager');
 const { AuditManager } = require('./audit-manager');
 const { initProjectSafety } = require('./safety');
 const { PolicyEngine } = require('./policy-engine');
+const { LivePrototypeManager } = require('./live-prototype-manager');
 
 let mainWindow;
 let sessionManager;
@@ -28,6 +29,7 @@ let swarmManager;
 let searchManager;
 let auditManager;
 let policyEngine;
+let livePrototypeManager;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -67,9 +69,33 @@ app.whenReady().then(() => {
   policyEngine = new PolicyEngine();
   searchManager = new SearchManager();
   swarmManager = new SwarmManager(sessionManager, contextManager);
+  livePrototypeManager = new LivePrototypeManager(sessionManager, settingsManager);
 
   createWindow();
 
+  // Handle media permissions (microphone for live prototype)
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(true);
+  });
+  mainWindow.webContents.session.setPermissionCheckHandler(() => {
+    return true;
+  });
+  if (mainWindow.webContents.session.setDevicePermissionHandler) {
+    mainWindow.webContents.session.setDevicePermissionHandler(() => true);
+  }
+
+  // Request microphone access on macOS
+  if (process.platform === 'darwin' && systemPreferences.askForMediaAccess) {
+    systemPreferences.askForMediaAccess('microphone').then((granted) => {
+      if (!granted) {
+        console.log('Microphone access not granted — enable in System Settings > Privacy > Microphone');
+      }
+    });
+    const screenStatus = systemPreferences.getMediaAccessStatus('screen');
+    if (screenStatus !== 'granted') {
+      console.log(`Screen recording: ${screenStatus} — system audio capture requires Screen Recording permission`);
+    }
+  }
 
   // Initialize shared context for all existing projects
   for (const project of projectManager.list()) {
@@ -238,6 +264,12 @@ app.whenReady().then(() => {
     return true;
   });
 
+  // Open URL in native browser
+  ipcMain.handle('shell:openExternal', (_, url) => {
+    const { shell } = require('electron');
+    shell.openExternal(url);
+  });
+
   // Dialog for folder picker
   ipcMain.handle('dialog:openFolder', async () => {
     const { dialog } = require('electron');
@@ -269,6 +301,126 @@ app.whenReady().then(() => {
         .filter(f => f.endsWith('.png'))
         .map(f => ({ name: f, path: path.join(screenshotsDir, f) }));
     } catch { return []; }
+  });
+
+  // Live Prototype IPC
+  ipcMain.handle('livePrototype:start', (_, mode) => {
+    livePrototypeManager.start(mode);
+    return true;
+  });
+  ipcMain.handle('livePrototype:stop', () => {
+    livePrototypeManager.stop();
+    return true;
+  });
+  ipcMain.handle('livePrototype:feed', (_, { text, speaker }) => {
+    livePrototypeManager.feedTranscript(text, speaker);
+    return true;
+  });
+  ipcMain.handle('livePrototype:forceDetect', (_, description) => {
+    return livePrototypeManager.forceDetect(description);
+  });
+  ipcMain.handle('livePrototype:confirm', async (_, { editedDescription, editedName }) => {
+    return await livePrototypeManager.confirmProposal(editedDescription, editedName);
+  });
+  ipcMain.handle('livePrototype:dismiss', () => {
+    livePrototypeManager.dismissProposal();
+    return true;
+  });
+  ipcMain.handle('livePrototype:stopBuild', () => {
+    livePrototypeManager.stopPrototype();
+    return true;
+  });
+  ipcMain.handle('livePrototype:attach', (_, attachment) => {
+    livePrototypeManager.addAttachment(attachment);
+    return true;
+  });
+  ipcMain.handle('livePrototype:removeAttachment', (_, index) => {
+    livePrototypeManager.removeAttachment(index);
+    return true;
+  });
+  ipcMain.handle('livePrototype:status', () => {
+    return livePrototypeManager.status;
+  });
+  ipcMain.handle('livePrototype:getThoughts', () => {
+    return livePrototypeManager.getThoughts();
+  });
+  ipcMain.handle('livePrototype:sendAudio', (_, buffer) => {
+    livePrototypeManager.sendAudio(Buffer.from(buffer));
+    return true;
+  });
+
+  // Desktop capturer for system audio
+  ipcMain.handle('desktop:getSources', async () => {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+    return sources.map(s => ({ id: s.id, name: s.name }));
+  });
+
+  // File dialog for attaching docs
+  ipcMain.handle('dialog:openFile', async () => {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Documents', extensions: ['pdf', 'md', 'txt', 'json', 'csv', 'html'] },
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled) return null;
+    return result.filePaths[0];
+  });
+
+  // Wire live prototype events to renderer
+  livePrototypeManager.on('state', (state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:state', state);
+    }
+  });
+  livePrototypeManager.on('transcript', (chunk) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:transcript', chunk);
+    }
+  });
+  livePrototypeManager.on('proposal', (proposal) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:proposal', proposal);
+    }
+  });
+  livePrototypeManager.on('serverReady', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:serverReady', info);
+    }
+  });
+  livePrototypeManager.on('attachments', (attachments) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:attachments', attachments);
+    }
+  });
+  livePrototypeManager.on('error', (err) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:error', err);
+    }
+  });
+  livePrototypeManager.on('thought', (thought) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:thought', thought);
+    }
+  });
+  livePrototypeManager.on('prototypeStatus', (status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:prototypeStatus', status);
+    }
+  });
+  livePrototypeManager.on('subagent', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:subagent', info);
+    }
+  });
+  livePrototypeManager.on('builderSession', (info) => {
+    const session = sessionManager.sessions.get(info.sessionId);
+    if (session) {
+      wireSession(session);
+    }
   });
 });
 

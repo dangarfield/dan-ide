@@ -299,7 +299,10 @@ async function restoreSessions() {
   }
 }
 
-async function restoreLiveSession(meta) {
+async function restoreLiveSession(meta, opts = {}) {
+  // Skip if already in sessions map (prevent duplicates)
+  if (sessions.has(meta.id)) return;
+
   const { terminal, fitAddon, paneEl } = await createTerminalPane(meta);
 
   // Replay history so far
@@ -334,7 +337,16 @@ async function restoreLiveSession(meta) {
     cleanup: () => { cleanupData(); cleanupExit(); },
   });
 
-  paneEl.classList.remove('visible');
+  // During batch startup restore, hide the pane (applyViewMode will show the right ones later).
+  // When adding a session at runtime, keep it visible so activateSession can show it immediately.
+  if (!opts.keepVisible) {
+    paneEl.classList.remove('visible');
+  }
+
+  // Sync PTY dimensions now that onResize is wired
+  setTimeout(() => {
+    fitAddon.fit();
+  }, 100);
 }
 
 async function restoreDeadSession(meta) {
@@ -835,10 +847,8 @@ async function newSession() {
 function activateSession(id) {
   activeSessionId = id;
   saveSettings({ activeSessionId: id });
-  // In single mode, only show the active one
-  if (viewMode === 'single') {
-    applyViewMode();
-  }
+  // Re-apply layout so the active session is visible
+  applyViewMode();
   renderTabs();
   renderDrawer();
 
@@ -1056,7 +1066,7 @@ function applyViewMode() {
 
 function getProjectSessions() {
   return Array.from(sessions.values()).filter(
-    (s) => s.meta.projectId === activeProjectId
+    (s) => s.meta.projectId === activeProjectId || s.meta.projectId === null
   );
 }
 
@@ -1348,6 +1358,17 @@ function renderTabs() {
           });
         }},
         { label: 'Close Agent', action: () => stopSession(s.meta.id) },
+        { label: 'Close All', action: () => {
+          const idsToClose = [];
+          for (const [id, entry] of sessions) {
+            if (viewMode === 'global') {
+              idsToClose.push(id);
+            } else {
+              if (entry.meta && (entry.meta.projectId === activeProjectId || entry.meta.projectId === null)) idsToClose.push(id);
+            }
+          }
+          for (const id of idsToClose) stopSession(id);
+        }},
       ]);
     });
     sessionTabsEl.appendChild(tab);
@@ -1630,4 +1651,6 @@ window.IDE = {
   updateStatusBar,
   createTerminalPane,
   updatePaneStatus,
+  restoreLiveSession,
+  activateSession,
 };

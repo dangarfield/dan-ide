@@ -4,7 +4,7 @@
 
 **Product:** Agentic Development Environment (ADE) — Dan IDE
 **Version:** 0.1.0
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-15
 
 ---
 
@@ -233,7 +233,7 @@ Dan IDE is conceptualized as a layered architecture, with each layer representin
 
 | # | Feature | Priority | Status |
 |---|---------|----------|--------|
-| 1 | Visual Agent/Service Canvas with Live Execution | P0 | Partial |
+| 1 | Visual Agent/Service Canvas with Live Execution | P0 | Implemented (agent topology only, not system architecture) |
 | 2 | Autonomous Task-Oriented Agent Mode | P0 | Implemented |
 | 3 | Multi-Agent Coordination Framework | P1 | Implemented |
 | 4 | Architecture DSL & Design-to-Code Sync | P2 | Planned |
@@ -245,21 +245,21 @@ Dan IDE is conceptualized as a layered architecture, with each layer representin
 | 5 | Project-Wide Codebase Index & Search | P0 | Implemented |
 | 6 | Architecture Knowledge Base & Integration | P1 | Planned |
 | 7 | Runtime Observability Integration | P1 | Planned |
-| 8 | Persistent Project Memory & Learning | P2 | Partial |
+| 8 | Persistent Project Memory & Learning | P2 | Implemented (workspace memory in ~/.dan-ide/workspaces/) |
 
 ### Theme 3: Verification, Testing & Safety
 
 | # | Feature | Priority | Status |
 |---|---------|----------|--------|
-| 9 | Integrated Test Suite Execution & Generation | P0 | Implemented |
+| 9 | Integrated Test Suite Execution & Generation | P0 | Removed (agents run tests directly) |
 | 10 | Behavioral Assertions & Policy Engine | P1 | Implemented |
-| 11 | Comprehensive Audit Trail & Replay | P1 | Partial |
+| 11 | Comprehensive Audit Trail & Replay | P1 | Implemented (event logging, timeline UI, JSONL persistence) |
 
 ### Theme 4: Developer Tools & Collaboration
 
 | # | Feature | Priority | Status |
 |---|---------|----------|--------|
-| 12 | Context-Aware Code Generation & Refactoring | P0 | Partial |
+| 12 | Context-Aware Code Generation & Refactoring | P0 | Implemented (file structure + policies injected into agent context) |
 | 13 | Interactive Debugging & Troubleshooting Agent | P1 | Planned |
 | 14 | Documentation & Diagram Generation | P2 | Planned |
 | 15 | Real-Time Collaborative Mode | P2 | Planned |

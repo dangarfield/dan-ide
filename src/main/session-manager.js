@@ -31,42 +31,25 @@ class Session {
     const shell = this.cli;
     const args = this.args;
 
-    // Ensure .dan-ide/memory exists
-    const memoryDir = path.join(this.projectPath, '.dan-ide', 'memory');
-    fs.mkdirSync(memoryDir, { recursive: true });
-
-    // Ensure .dan-ide/sessions exists
-    const sessionsDir = path.join(this.projectPath, '.dan-ide', 'sessions');
-    fs.mkdirSync(sessionsDir, { recursive: true });
-
-    // Ensure CLAUDE.md exists in .dan-ide for Claude Code memory integration
-    const claudeMdPath = path.join(this.projectPath, '.dan-ide', 'CLAUDE.md');
-    if (!fs.existsSync(claudeMdPath)) {
-      fs.writeFileSync(claudeMdPath, [
-        '# Dan IDE Multi-Agent Environment',
-        '',
-        `You are running in Dan IDE with other agents. Shared memory: ${memoryDir}`,
-        '',
-        'BEFORE starting any task:',
-        '1. Read .dan-ide/memory/CONTEXT.md for project state and active agents',
-        '2. Read .dan-ide/memory/SHARED.md for other agents\' findings',
-        '',
-        'AFTER completing work:',
-        '- Update .dan-ide/memory/SHARED.md with your findings (append, don\'t overwrite)',
-        '- Use clear section headings and timestamps',
-        '',
-        'To communicate with other agents:',
-        '- Append to .dan-ide/memory/MESSAGES.md with format: ### [timestamp] YourName\\nMessage',
-        '',
-      ].join('\n'));
+    // Ensure workspace dirs exist in global state
+    const { workspaceMemoryDir, workspaceSessionsDir } = require('./paths');
+    if (this.projectId) {
+      fs.mkdirSync(workspaceMemoryDir(this.projectId), { recursive: true });
+      fs.mkdirSync(workspaceSessionsDir(this.projectId), { recursive: true });
     }
+
+    // Ensure .dan-ide dir exists in project (for agent rules)
+    const danIdeDir = path.join(this.projectPath, '.dan-ide');
+    fs.mkdirSync(danIdeDir, { recursive: true });
+
+    const memDir = this.projectId ? workspaceMemoryDir(this.projectId) : danIdeDir;
 
     const env = {
       ...process.env,
       ...this.env,
       DAN_IDE_SESSION_ID: this.id,
       DAN_IDE_PROJECT_PATH: this.projectPath,
-      DAN_IDE_MEMORY_PATH: memoryDir,
+      DAN_IDE_MEMORY_PATH: memDir,
     };
     // Remove CLAUDECODE env var so Claude Code doesn't think it's nested
     delete env.CLAUDECODE;
@@ -205,10 +188,13 @@ class SessionManager {
     if (cliKey === 'claude' && !assignedClaudeSessionId) {
       assignedClaudeSessionId = crypto.randomUUID();
     }
-    const { args, env } = this._buildCliArgs(cliKey, projectPath, role, resume, assignedClaudeSessionId);
+    const { args, env } = this._buildCliArgs(cliKey, projectPath, projectId, role, resume, assignedClaudeSessionId);
     // Ensure shared memory files exist before spawning
-    this._ensureSharedMemoryFiles(projectPath);
-    const historyFile = path.join(projectPath, '.dan-ide', 'sessions', `${id}.log`);
+    this._ensureSharedMemoryFiles(projectPath, projectId);
+    const { workspaceSessionsDir } = require('./paths');
+    const sessDir = projectId ? workspaceSessionsDir(projectId) : path.join(projectPath, '.dan-ide', 'sessions');
+    fs.mkdirSync(sessDir, { recursive: true });
+    const historyFile = path.join(sessDir, `${id}.log`);
 
     const session = new Session({
       id,
@@ -251,8 +237,9 @@ class SessionManager {
     return map[cli] || cli;
   }
 
-  _buildCliArgs(cli, projectPath, role, resume, claudeSessionId) {
-    const memoryPath = path.join(projectPath, '.dan-ide', 'memory');
+  _buildCliArgs(cli, projectPath, projectId, role, resume, claudeSessionId) {
+    const { workspaceMemoryDir } = require('./paths');
+    const memoryPath = projectId ? workspaceMemoryDir(projectId) : path.join(projectPath, '.dan-ide', 'memory');
     const contextFile = path.join(memoryPath, 'CONTEXT.md');
     const sharedFile = path.join(memoryPath, 'SHARED.md');
     let args = [];
@@ -292,7 +279,7 @@ class SessionManager {
           '--read', sharedFile,
         ];
         // Write collaboration instructions to a file that aider reads
-        this._ensureAiderContext(projectPath, collaborationPrompt, policyPrompt);
+        this._ensureAiderContext(projectPath, projectId, collaborationPrompt, policyPrompt);
         args.push('--read', path.join(memoryPath, 'AGENT_INSTRUCTIONS.md'));
         break;
 
@@ -352,8 +339,9 @@ class SessionManager {
     fs.writeFileSync(rulesFile, content);
   }
 
-  _ensureAiderContext(projectPath, collaborationPrompt, policyPrompt) {
-    const memoryPath = path.join(projectPath, '.dan-ide', 'memory');
+  _ensureAiderContext(projectPath, projectId, collaborationPrompt, policyPrompt) {
+    const { workspaceMemoryDir } = require('./paths');
+    const memoryPath = projectId ? workspaceMemoryDir(projectId) : path.join(projectPath, '.dan-ide', 'memory');
     fs.mkdirSync(memoryPath, { recursive: true });
     const instructionsFile = path.join(memoryPath, 'AGENT_INSTRUCTIONS.md');
     const content = collaborationPrompt + '\n\n## Policy Constraints\n\n' + policyPrompt;
@@ -370,8 +358,9 @@ class SessionManager {
     return roles[role] || role;
   }
 
-  _ensureSharedMemoryFiles(projectPath) {
-    const memoryPath = path.join(projectPath, '.dan-ide', 'memory');
+  _ensureSharedMemoryFiles(projectPath, projectId) {
+    const { workspaceMemoryDir } = require('./paths');
+    const memoryPath = projectId ? workspaceMemoryDir(projectId) : path.join(projectPath, '.dan-ide', 'memory');
     fs.mkdirSync(memoryPath, { recursive: true });
 
     const sharedFile = path.join(memoryPath, 'SHARED.md');

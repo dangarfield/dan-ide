@@ -1,47 +1,23 @@
-# Dan IDE — Multi-Agent Collaboration
+---
+trigger: always
+---
 
-You are running inside Dan IDE, a multi-agent development environment. Multiple AI agents may be working on the same project simultaneously.
+# Dan IDE Multi-Agent Context
 
-## Your Capabilities in Dan IDE
-- You are one of potentially several agents (Claude, Kiro, Aider, or Shell)
-- You share a project workspace with other agents
-- You can communicate with other agents via shared files
-- A human architect oversees all agents and may send you tasks or questions about other agents' work
+You are running inside Dan IDE, a multi-agent development environment.
+Multiple AI agents may be working on this project simultaneously.
 
-## Shared Memory (READ THIS FIRST)
-- **Context file**: `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/CONTEXT.md` — project state, active agents, current tasks
-- **Shared findings**: `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/SHARED.md` — results and discoveries from all agents
-- **Messages**: `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/MESSAGES.md` — inter-agent communication log
-- **Memory directory**: `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/` — all shared files live here
+## Shared Context Protocol
 
-## Communication Protocol
-1. **BEFORE starting any task**: Read `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/CONTEXT.md` for project state and what other agents are doing
-2. **AFTER completing work**: Update `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/SHARED.md` with your findings, using a clear heading and timestamp
-3. **To message other agents**: Append to `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/MESSAGES.md` with format:
-   ```
-   ### [YYYY-MM-DD HH:MM] YourName
-   Your message here
-   ```
-4. **To see other agents' output**: Read `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/SHARED.md` — other agents write their results there
-5. **Do not overwrite** other agents' entries — append below them
+Before starting ANY task:
+1. Read the file at `/Users/Dan.Garfield/.dan-ide/workspaces/03e9053d-62de-4d90-a9ad-4c19d37f2364/memory/CONTEXT.md` for full project state
+2. Read the file at `/Users/Dan.Garfield/.dan-ide/workspaces/03e9053d-62de-4d90-a9ad-4c19d37f2364/memory/SHARED.md` for project knowledge
 
-## When Asked About Other Agents' Work
-If the human asks you about what another agent found, or asks you to compare/evaluate results:
-1. Read `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/SHARED.md` to see all agents' findings
-2. Read `/Users/Dan.Garfield/code/dan-ide/.dan-ide/memory/MESSAGES.md` for any inter-agent messages
-3. Base your answer on what's written in shared memory
+After completing work:
+1. Update `/Users/Dan.Garfield/.dan-ide/workspaces/03e9053d-62de-4d90-a9ad-4c19d37f2364/memory/SHARED.md` with your findings
+2. To communicate with other agents, append to `/Users/Dan.Garfield/.dan-ide/workspaces/03e9053d-62de-4d90-a9ad-4c19d37f2364/memory/MESSAGES.md`
 
-
-
-## Policy Constraints
-
-## Policy Constraints (MANDATORY)
-
-The following policies MUST be followed at all times. Violations of critical policies are strictly forbidden.
-
-- [CRITICAL] Never delete .git directory or force push
-- [CRITICAL] Never commit .env files or expose API keys
-- [HIGH] Never modify production configurations without explicit approval
-- [MEDIUM] Always run tests before committing changes
-
-If you are unsure whether an action violates a policy, ask for clarification before proceeding.
+## Boundaries
+- Only modify files within this project directory
+- Do NOT force push or push to main without instruction
+- Create feature branches for new work

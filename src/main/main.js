@@ -1,6 +1,12 @@
 const { app, BrowserWindow, ipcMain, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+// Suppress EPIPE errors from dead PTY/IPC channels (non-fatal)
+process.on('uncaughtException', (err) => {
+  if (err.code === 'EPIPE' || err.message === 'write EPIPE') return;
+  console.error('Uncaught exception:', err);
+});
 const { SessionManager } = require('./session-manager');
 const { ProjectManager } = require('./project-manager');
 const { FileManager } = require('./file-manager');
@@ -11,7 +17,6 @@ const { SearchManager } = require('./search-manager');
 const { AuditManager } = require('./audit-manager');
 const { initProjectSafety } = require('./safety');
 const { PolicyEngine } = require('./policy-engine');
-const { TestRunner } = require('./test-runner');
 
 let mainWindow;
 let sessionManager;
@@ -23,7 +28,6 @@ let swarmManager;
 let searchManager;
 let auditManager;
 let policyEngine;
-let testRunner;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -49,6 +53,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Set dock icon on macOS
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(path.join(__dirname, '../../assets/icon.png'));
+  }
+
   projectManager = new ProjectManager();
   sessionManager = new SessionManager();
   fileManager = new FileManager();
@@ -56,16 +65,16 @@ app.whenReady().then(() => {
   contextManager = new ContextManager();
   auditManager = new AuditManager();
   policyEngine = new PolicyEngine();
-  testRunner = new TestRunner();
   searchManager = new SearchManager();
   swarmManager = new SwarmManager(sessionManager, contextManager);
 
   createWindow();
 
+
   // Initialize shared context for all existing projects
   for (const project of projectManager.list()) {
-    contextManager.initProject(project.path);
-    contextManager.watchProject(project.path, sessionManager.listAll());
+    contextManager.initProject(project.path, project.id);
+    contextManager.watchProject(project.path, project.id, sessionManager.listAll());
   }
 
   // Project IPC
@@ -73,7 +82,7 @@ app.whenReady().then(() => {
   ipcMain.handle('projects:add', (_, folderPath) => {
     const project = projectManager.add(folderPath);
     initProjectSafety(folderPath);
-    contextManager.initProject(folderPath);
+    contextManager.initProject(folderPath, project.id);
     return project;
   });
   ipcMain.handle('projects:remove', (_, id) => projectManager.remove(id));
@@ -82,19 +91,19 @@ app.whenReady().then(() => {
   // Session IPC
   ipcMain.handle('sessions:create', (_, opts) => {
     // Initialize context for project before spawning agent
-    if (opts.projectPath) {
-      contextManager.initProject(opts.projectPath);
+    if (opts.projectPath && opts.projectId) {
+      contextManager.initProject(opts.projectPath, opts.projectId);
       const activeSessions = sessionManager.listAll();
-      contextManager.rebuildContext(opts.projectPath, activeSessions);
-      contextManager.watchProject(opts.projectPath, activeSessions);
+      contextManager.rebuildContext(opts.projectPath, opts.projectId, activeSessions);
+      contextManager.watchProject(opts.projectPath, opts.projectId, activeSessions);
     }
 
     const session = sessionManager.create(opts);
     wireSession(session);
-    auditManager.logEvent({ type: 'session_start', agentName: session.name || session.id, description: `Session started (cli: ${opts.cli || 'claude'})`, projectId: opts.projectPath, sessionId: session.id });
+    auditManager.logEvent({ type: 'session_start', agentName: session.name || session.id, description: `Session started (cli: ${opts.cli || 'claude'})`, projectId: opts.projectId, sessionId: session.id });
     // Rebuild context now that new agent is listed
-    if (opts.projectPath) {
-      contextManager.rebuildContext(opts.projectPath, sessionManager.listAll());
+    if (opts.projectPath && opts.projectId) {
+      contextManager.rebuildContext(opts.projectPath, opts.projectId, sessionManager.listAll());
     }
     return session.toJSON();
   });
@@ -106,16 +115,16 @@ app.whenReady().then(() => {
   ipcMain.handle('sessions:stop', (_, id) => {
     const session = sessionManager.sessions.get(id);
     sessionManager.stop(id);
-    auditManager.logEvent({ type: 'session_stop', agentName: (session && session.name) || id, description: 'Session stopped', projectId: session && session.projectPath, sessionId: id });
-    if (session && session.projectPath) {
-      contextManager.rebuildContext(session.projectPath, sessionManager.listAll());
+    auditManager.logEvent({ type: 'session_stop', agentName: (session && session.name) || id, description: 'Session stopped', projectId: session && session.projectId, sessionId: id });
+    if (session && session.projectPath && session.projectId) {
+      contextManager.rebuildContext(session.projectPath, session.projectId, sessionManager.listAll());
     }
   });
   ipcMain.handle('sessions:remove', (_, id) => {
     const session = sessionManager.sessions.get(id);
     sessionManager.remove(id);
-    if (session && session.projectPath) {
-      contextManager.rebuildContext(session.projectPath, sessionManager.listAll());
+    if (session && session.projectPath && session.projectId) {
+      contextManager.rebuildContext(session.projectPath, session.projectId, sessionManager.listAll());
     }
   });
   ipcMain.handle('sessions:rename', (_, { id, name }) => sessionManager.rename(id, name));
@@ -138,28 +147,37 @@ app.whenReady().then(() => {
   // Settings IPC
   ipcMain.handle('settings:load', () => settingsManager.load());
   ipcMain.handle('settings:save', (_, patch) => settingsManager.save(patch));
+  ipcMain.handle('settings:loadWorkspace', (_, projectId) => settingsManager.loadWorkspace(projectId));
+  ipcMain.handle('settings:saveWorkspace', (_, { projectId, patch }) => settingsManager.saveWorkspace(projectId, patch));
 
   // Context IPC
-  ipcMain.handle('context:rebuild', (_, projectPath) => {
-    contextManager.rebuildContext(projectPath, sessionManager.listAll());
+  ipcMain.handle('context:rebuild', (_, { projectPath, projectId }) => {
+    contextManager.rebuildContext(projectPath, projectId, sessionManager.listAll());
     return true;
   });
-  ipcMain.handle('context:postMessage', (_, { projectPath, fromAgent, message }) => {
-    contextManager.postMessage(projectPath, fromAgent, message);
+  ipcMain.handle('context:postMessage', (_, { projectPath, projectId, fromAgent, message }) => {
+    contextManager.postMessage(projectPath, projectId, fromAgent, message);
     return true;
   });
-  ipcMain.handle('context:init', (_, projectPath) => {
-    contextManager.initProject(projectPath);
-    contextManager.watchProject(projectPath, sessionManager.listAll());
+  ipcMain.handle('context:init', (_, { projectPath, projectId }) => {
+    contextManager.initProject(projectPath, projectId);
+    contextManager.watchProject(projectPath, projectId, sessionManager.listAll());
     return true;
   });
-  ipcMain.handle('context:readMessages', (_, projectPath) => {
-    const messagesFile = path.join(projectPath, '.dan-ide', 'memory', 'MESSAGES.md');
+  ipcMain.handle('context:readMessages', (_, projectId) => {
+    const { workspaceMemoryDir } = require('./paths');
+    const messagesFile = path.join(workspaceMemoryDir(projectId), 'MESSAGES.md');
     try {
       return fs.readFileSync(messagesFile, 'utf8');
     } catch {
       return '';
     }
+  });
+  ipcMain.handle('context:clearMessages', (_, projectId) => {
+    const { workspaceMemoryDir } = require('./paths');
+    const messagesFile = path.join(workspaceMemoryDir(projectId), 'MESSAGES.md');
+    try { fs.writeFileSync(messagesFile, ''); } catch {}
+    return true;
   });
 
   // Swarm IPC
@@ -201,10 +219,6 @@ app.whenReady().then(() => {
   ipcMain.handle('search:structure', (_, projectPath) => searchManager.getFileStructure(projectPath));
   ipcMain.handle('search:fileSummary', (_, filePath) => searchManager.getFileSummary(filePath));
 
-  // Test Runner IPC
-  ipcMain.handle('tests:detect', (_, projectPath) => testRunner.detect(projectPath));
-  ipcMain.handle('tests:run', (_, projectPath) => testRunner.run(projectPath));
-  ipcMain.handle('tests:runFile', (_, { projectPath, testFile }) => testRunner.runSpecific(projectPath, testFile));
 
   // File watcher
   let fileWatcher = null;
@@ -234,9 +248,10 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
 
-  // Browser screenshot - save to .dan-ide/screenshots/
-  ipcMain.handle('browser:saveScreenshot', (_, { projectPath, dataUrl, filename }) => {
-    const screenshotsDir = path.join(projectPath, '.dan-ide', 'screenshots');
+  // Browser screenshot - save to ~/.dan-ide/workspaces/<id>/screenshots/
+  ipcMain.handle('browser:saveScreenshot', (_, { projectId, dataUrl, filename }) => {
+    const { workspaceScreenshotsDir } = require('./paths');
+    const screenshotsDir = workspaceScreenshotsDir(projectId);
     fs.mkdirSync(screenshotsDir, { recursive: true });
     const fname = filename || `screenshot-${Date.now()}.png`;
     const filePath = path.join(screenshotsDir, fname);
@@ -246,8 +261,9 @@ app.whenReady().then(() => {
   });
 
   // List screenshots
-  ipcMain.handle('browser:listScreenshots', (_, projectPath) => {
-    const screenshotsDir = path.join(projectPath, '.dan-ide', 'screenshots');
+  ipcMain.handle('browser:listScreenshots', (_, projectId) => {
+    const { workspaceScreenshotsDir } = require('./paths');
+    const screenshotsDir = workspaceScreenshotsDir(projectId);
     try {
       return fs.readdirSync(screenshotsDir)
         .filter(f => f.endsWith('.png'))

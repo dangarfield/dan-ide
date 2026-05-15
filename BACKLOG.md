@@ -4,7 +4,7 @@ Based on: "Deep Dive: Architect-First Agentic IDE – Functional Requirements an
 
 ## Architect-First Gap Analysis
 
-**Current state**: Dan IDE is a multi-agent terminal multiplexer with swarm coordination, file editing, code search, test running, policy enforcement, and audit logging.
+**Current state**: Dan IDE is a multi-agent terminal multiplexer with swarm coordination, file editing, code search, policy enforcement, and audit logging.
 
 **Gap to "Architect-First"**: The tool currently treats all users equally. To serve architects specifically, it needs:
 
@@ -21,7 +21,7 @@ Based on: "Deep Dive: Architect-First Agentic IDE – Functional Requirements an
 | 1 | Visual Agent Canvas | ✅ DONE | Graph visualization, status dots, pulse animation |
 | 2 | Autonomous Agent Missions | ✅ DONE | Progress tracking, completion detection, improved prompts |
 | 3 | Project-Wide Codebase Search | ✅ DONE | Text search, file structure, summaries |
-| 4 | Integrated Test Suite | ✅ DONE | Detect jest/vitest/pytest/mocha, run, parse results |
+| 4 | Integrated Test Suite | REMOVED | Was implemented, removed from UI — agents run tests directly in terminal |
 | 5 | Context-Aware Code Generation | ✅ DONE | File structure + policies in agent context |
 | 6 | Browser with Screenshot-to-Agent | ✅ DONE | Webview, annotation, region select, send to agent |
 
@@ -48,7 +48,7 @@ Based on: "Deep Dive: Architect-First Agentic IDE – Functional Requirements an
 | 18 | Documentation Generation | NOT STARTED | Auto-generate diagrams from code |
 | 19 | Real-Time Collaborative Mode | NOT STARTED | Multi-user shared sessions |
 | 20 | Human Feedback Learning | NOT STARTED | Tune agent behavior from feedback |
-| 21 | Persistent Project Memory | NOT STARTED | Long-term knowledge retention |
+| 21 | Persistent Project Memory | ✅ DONE | Workspace memory in ~/.dan-ide/workspaces/<projectId>/memory/ |
 | 22 | Performance & Cost Analysis | NOT STARTED | Track AI API costs, suggest optimizations |
 
 ## What Makes This an Architect Tool (vs. Just a Coding Tool)

@@ -1,13 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { GLOBAL_DIR, workspaceSettingsFile, workspaceDir } = require('./paths');
 
-const GLOBAL_STATE_DIR = path.join(os.homedir(), '.dan-ide');
-const SETTINGS_FILE = path.join(GLOBAL_STATE_DIR, 'settings.json');
+const SETTINGS_FILE = path.join(GLOBAL_DIR, 'settings.json');
 
 class SettingsManager {
   constructor() {
-    fs.mkdirSync(GLOBAL_STATE_DIR, { recursive: true });
+    fs.mkdirSync(GLOBAL_DIR, { recursive: true });
     this._cache = this._read();
   }
 
@@ -37,6 +36,30 @@ class SettingsManager {
 
   get(key) {
     return this._cache[key];
+  }
+
+  // Workspace-level settings (stored in ~/.dan-ide/workspaces/<projectId>/settings.json)
+  loadWorkspace(projectId) {
+    const wsFile = workspaceSettingsFile(projectId);
+    try {
+      const data = fs.readFileSync(wsFile, 'utf8');
+      return JSON.parse(data);
+    } catch {
+      return {};
+    }
+  }
+
+  saveWorkspace(projectId, patch) {
+    const wsDir = workspaceDir(projectId);
+    const wsFile = workspaceSettingsFile(projectId);
+    fs.mkdirSync(wsDir, { recursive: true });
+    let current = {};
+    try {
+      current = JSON.parse(fs.readFileSync(wsFile, 'utf8'));
+    } catch {}
+    const merged = { ...current, ...patch };
+    fs.writeFileSync(wsFile, JSON.stringify(merged, null, 2));
+    return merged;
   }
 }
 

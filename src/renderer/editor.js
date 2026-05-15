@@ -11,44 +11,93 @@ const monacoContainerEl = document.getElementById('monaco-container');
 
 // File tree search/filter
 let _lastTreePath = null;
+let _treeData = null; // store full tree data for search
+
 if (fileTreeSearch) {
   fileTreeSearch.addEventListener('input', () => {
-    const query = fileTreeSearch.value.toLowerCase();
+    const query = fileTreeSearch.value.toLowerCase().trim();
     filterFileTree(query);
+  });
+  fileTreeSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      // Open the first visible result
+      const firstResult = fileTreeEl.querySelector('.tree-search-result');
+      if (firstResult) firstResult.click();
+    }
+    if (e.key === 'Escape') {
+      fileTreeSearch.value = '';
+      filterFileTree('');
+      fileTreeSearch.blur();
+    }
   });
 }
 
 function filterFileTree(query) {
-  const items = fileTreeEl.querySelectorAll('.tree-item');
-  const dirContainers = fileTreeEl.querySelectorAll('.tree-dir-children');
-
   if (!query) {
-    // Show all items, collapse dirs back
-    items.forEach((el) => el.style.display = '');
-    dirContainers.forEach((el) => {
-      // Keep previously-opened dirs open
-    });
+    // Restore normal tree view
+    if (_treeData && _lastTreePath) {
+      fileTreeEl.innerHTML = '';
+      renderTree(_treeData, fileTreeEl, 0);
+    }
     return;
   }
 
-  // Show items matching query, hide others
-  items.forEach((el) => {
-    const name = el.querySelector('.tree-name');
-    if (name && name.textContent.toLowerCase().includes(query)) {
-      el.style.display = '';
-      // Ensure parent containers are visible
-      let parent = el.parentElement;
-      while (parent && parent !== fileTreeEl) {
-        if (parent.classList.contains('tree-dir-children')) {
-          parent.classList.add('open');
-          parent.style.display = '';
+  if (!_treeData) return;
+
+  // Collect all files matching query from full tree data
+  const matches = [];
+  function walkTree(nodes, pathParts) {
+    for (const node of nodes) {
+      if (node.type === 'dir') {
+        if (node.children) {
+          walkTree(node.children, [...pathParts, node.name]);
         }
-        parent = parent.parentElement;
+      } else {
+        const fullRelPath = [...pathParts, node.name].join('/');
+        if (node.name.toLowerCase().includes(query) || fullRelPath.toLowerCase().includes(query)) {
+          matches.push({ name: node.name, path: node.path, relPath: fullRelPath });
+        }
       }
-    } else {
-      el.style.display = 'none';
     }
-  });
+  }
+  walkTree(_treeData, []);
+
+  // Render flat list of matching files
+  fileTreeEl.innerHTML = '';
+  if (matches.length === 0) {
+    fileTreeEl.innerHTML = '<div style="padding:12px;color:#666;font-size:12px">No matches</div>';
+    return;
+  }
+
+  const maxResults = 50;
+  const shown = matches.slice(0, maxResults);
+  for (const match of shown) {
+    const item = document.createElement('div');
+    item.className = 'tree-item tree-search-result';
+    item.style.paddingLeft = '8px';
+    const iconClass = getFileIconClass(match.name);
+    // Show relative path with filename highlighted
+    const dirPart = match.relPath.slice(0, match.relPath.length - match.name.length);
+    item.innerHTML = `
+      <span class="tree-icon file ${iconClass}">&#128196;</span>
+      <span class="tree-name">${escHtml(match.name)}</span>
+      <span class="tree-search-path">${escHtml(dirPart)}</span>
+    `;
+    item.addEventListener('click', () => {
+      openFile(match.path);
+      // Clear search and restore tree
+      fileTreeSearch.value = '';
+      filterFileTree('');
+    });
+    fileTreeEl.appendChild(item);
+  }
+
+  if (matches.length > maxResults) {
+    const more = document.createElement('div');
+    more.style.cssText = 'padding:8px 12px;color:#666;font-size:11px';
+    more.textContent = `+${matches.length - maxResults} more results...`;
+    fileTreeEl.appendChild(more);
+  }
 }
 
 // ========== Monaco Setup ==========
@@ -111,7 +160,9 @@ async function loadFileTree(projectPath) {
     fileTreeEl.innerHTML = '<div style="padding:12px;color:#666">No project selected</div>';
     return;
   }
+  _lastTreePath = projectPath;
   const tree = await window.api.getFileTree(projectPath);
+  _treeData = tree;
   fileTreeEl.innerHTML = '';
   renderTree(tree, fileTreeEl, 0);
 }
@@ -257,14 +308,55 @@ function closeFile(filePath) {
 }
 
 // ========== Editor Tabs ==========
+function getFileTabIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const icons = {
+    js: { symbol: '<>', cls: 'icon-js' },
+    mjs: { symbol: '<>', cls: 'icon-js' },
+    jsx: { symbol: '<>', cls: 'icon-js' },
+    ts: { symbol: '<>', cls: 'icon-ts' },
+    tsx: { symbol: '<>', cls: 'icon-ts' },
+    html: { symbol: '<>', cls: 'icon-html' },
+    htm: { symbol: '<>', cls: 'icon-html' },
+    css: { symbol: '#', cls: 'icon-css' },
+    scss: { symbol: '#', cls: 'icon-css' },
+    json: { symbol: '{}', cls: 'icon-json' },
+    md: { symbol: '\u2193', cls: 'icon-md' },
+    markdown: { symbol: '\u2193', cls: 'icon-md' },
+    py: { symbol: '\u03BB', cls: 'icon-py' },
+  };
+  return icons[ext] || { symbol: '\u25C7', cls: '' };
+}
+
 function renderEditorTabs() {
   editorTabsEl.innerHTML = '';
+
+  // Detect duplicate filenames for disambiguation
+  const nameCount = new Map();
+  for (const [filePath] of openFiles) {
+    const name = filePath.split('/').pop();
+    nameCount.set(name, (nameCount.get(name) || 0) + 1);
+  }
+
   for (const [filePath, file] of openFiles) {
     const name = filePath.split('/').pop();
+    const needsDisambig = nameCount.get(name) > 1;
+    const icon = getFileTabIcon(name);
+
+    // Get parent folder for disambiguation
+    let disambig = '';
+    if (needsDisambig) {
+      const parts = filePath.split('/');
+      const parent = parts[parts.length - 2] || '';
+      disambig = `\u2026/${parent}`;
+    }
+
     const tab = document.createElement('div');
     tab.className = `editor-tab${filePath === activeFilePath ? ' active' : ''}${file.modified ? ' modified' : ''}`;
     tab.innerHTML = `
-      <span>${escHtml(file.modified ? name + ' *' : name)}</span>
+      <span class="tab-icon ${icon.cls}">${icon.symbol}</span>
+      <span class="editor-tab-name">${escHtml(name)}</span>
+      ${disambig ? `<span class="tab-disambig">${escHtml(disambig)}</span>` : ''}
       <span class="tab-close">&times;</span>
     `;
     tab.addEventListener('click', (e) => {
@@ -274,7 +366,28 @@ function renderEditorTabs() {
         switchToFile(filePath);
       }
     });
+    // Middle-click closes the file
+    tab.addEventListener('mousedown', (e) => {
+      if (e.button === 1) { e.preventDefault(); closeFile(filePath); }
+    });
     editorTabsEl.appendChild(tab);
+  }
+
+  // Enable horizontal scroll with mouse wheel
+  if (!editorTabsEl._hasHScroll) {
+    editorTabsEl._hasHScroll = true;
+    editorTabsEl.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        editorTabsEl.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+  }
+
+  // Show/hide no-file message
+  const noFileMsg = document.getElementById('no-file-msg');
+  if (noFileMsg) {
+    noFileMsg.style.display = openFiles.size === 0 ? 'flex' : 'none';
   }
 }
 

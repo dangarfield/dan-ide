@@ -1,28 +1,96 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a1a2e"/>
-      <stop offset="100%" style="stop-color:#0d1b2a"/>
+      <stop offset="0%" style="stop-color:#16162a"/>
+      <stop offset="100%" style="stop-color:#0a0e1a"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="glow1" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#4ecdc4"/>
-      <stop offset="100%" style="stop-color:#3498db"/>
+      <stop offset="100%" style="stop-color:#2eafb0"/>
     </linearGradient>
+    <linearGradient id="glow2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#3b5bdb"/>
+    </linearGradient>
+    <linearGradient id="glow3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a855f7"/>
+      <stop offset="100%" style="stop-color:#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="dStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4ecdc4"/>
+      <stop offset="40%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#a855f7"/>
+    </linearGradient>
+    <filter id="nodeGlow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
+
   <!-- Background rounded square -->
-  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
-  <!-- Terminal bracket left -->
-  <path d="M120 180 L180 256 L120 332" stroke="url(#accent)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Terminal bracket right -->
-  <path d="M392 180 L332 256 L392 332" stroke="url(#accent)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Center nodes (agents) -->
-  <circle cx="220" cy="220" r="18" fill="#4ecdc4" opacity="0.9"/>
-  <circle cx="292" cy="220" r="18" fill="#3498db" opacity="0.9"/>
-  <circle cx="256" cy="292" r="18" fill="#9b59b6" opacity="0.9"/>
-  <!-- Connection lines between nodes -->
-  <line x1="235" y1="228" x2="277" y2="228" stroke="#fff" stroke-width="3" opacity="0.4"/>
-  <line x1="227" y1="235" x2="249" y2="278" stroke="#fff" stroke-width="3" opacity="0.4"/>
-  <line x1="285" y1="235" x2="263" y2="278" stroke="#fff" stroke-width="3" opacity="0.4"/>
-  <!-- D letter subtle -->
-  <text x="256" y="420" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="64" fill="#fff" opacity="0.7">D</text>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle grid pattern -->
+  <g opacity="0.04" stroke="#fff" stroke-width="1">
+    <line x1="0" y1="128" x2="512" y2="128"/>
+    <line x1="0" y1="256" x2="512" y2="256"/>
+    <line x1="0" y1="384" x2="512" y2="384"/>
+    <line x1="128" y1="0" x2="128" y2="512"/>
+    <line x1="256" y1="0" x2="256" y2="512"/>
+    <line x1="384" y1="0" x2="384" y2="512"/>
+  </g>
+
+  <!-- The "D" shape - formed as a bold geometric letter -->
+  <path d="M160 120 L160 392 L280 392 C370 392 420 330 420 256 C420 182 370 120 280 120 Z"
+        stroke="url(#dStroke)" stroke-width="24" fill="none" stroke-linecap="round" stroke-linejoin="round"
+        filter="url(#softGlow)"/>
+
+  <!-- Inner circuit paths connecting agents -->
+  <g stroke="#fff" stroke-width="2" opacity="0.15">
+    <path d="M200 200 L300 200 L340 256 L300 312 L200 312" fill="none"/>
+    <line x1="200" y1="256" x2="340" y2="256"/>
+    <line x1="250" y1="200" x2="250" y2="312"/>
+  </g>
+
+  <!-- Connection lines between nodes (drawn first, behind nodes) -->
+  <g stroke="#fff" stroke-width="2.5" opacity="0.3">
+    <line x1="220" y1="200" x2="320" y2="200"/>
+    <line x1="220" y1="200" x2="220" y2="312"/>
+    <line x1="320" y1="200" x2="350" y2="256"/>
+    <line x1="220" y1="312" x2="350" y2="256"/>
+    <line x1="220" y1="312" x2="320" y2="200"/>
+  </g>
+
+  <!-- Agent nodes - positioned along the D shape -->
+  <!-- Node 1: top-left of D (teal) -->
+  <circle cx="220" cy="200" r="20" fill="url(#glow1)" filter="url(#nodeGlow)"/>
+  <circle cx="220" cy="200" r="8" fill="#fff" opacity="0.9"/>
+
+  <!-- Node 2: top-right curve of D (blue) -->
+  <circle cx="320" cy="200" r="20" fill="url(#glow2)" filter="url(#nodeGlow)"/>
+  <circle cx="320" cy="200" r="8" fill="#fff" opacity="0.9"/>
+
+  <!-- Node 3: right apex of D curve (purple) -->
+  <circle cx="350" cy="256" r="20" fill="url(#glow3)" filter="url(#nodeGlow)"/>
+  <circle cx="350" cy="256" r="8" fill="#fff" opacity="0.9"/>
+
+  <!-- Node 4: bottom-left of D (teal) -->
+  <circle cx="220" cy="312" r="20" fill="url(#glow1)" filter="url(#nodeGlow)"/>
+  <circle cx="220" cy="312" r="8" fill="#fff" opacity="0.9"/>
+
+  <!-- Small orbiting particles for dynamism -->
+  <circle cx="370" cy="180" r="4" fill="#4ecdc4" opacity="0.5"/>
+  <circle cx="390" cy="300" r="3" fill="#a855f7" opacity="0.4"/>
+  <circle cx="180" cy="160" r="3" fill="#667eea" opacity="0.4"/>
+  <circle cx="175" cy="350" r="4" fill="#4ecdc4" opacity="0.3"/>
 </svg>

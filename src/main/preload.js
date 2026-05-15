@@ -48,12 +48,14 @@ contextBridge.exposeInMainWorld('api', {
   // Settings (file-based, persistent)
   loadSettings: () => ipcRenderer.invoke('settings:load'),
   saveSettings: (patch) => ipcRenderer.invoke('settings:save', patch),
+  loadWorkspaceSettings: (projectId) => ipcRenderer.invoke('settings:loadWorkspace', projectId),
+  saveWorkspaceSettings: (projectId, patch) => ipcRenderer.invoke('settings:saveWorkspace', { projectId, patch }),
 
   // Shared context
-  initContext: (projectPath) => ipcRenderer.invoke('context:init', projectPath),
-  rebuildContext: (projectPath) => ipcRenderer.invoke('context:rebuild', projectPath),
-  postContextMessage: (projectPath, fromAgent, message) =>
-    ipcRenderer.invoke('context:postMessage', { projectPath, fromAgent, message }),
+  initContext: (projectPath, projectId) => ipcRenderer.invoke('context:init', { projectPath, projectId }),
+  rebuildContext: (projectPath, projectId) => ipcRenderer.invoke('context:rebuild', { projectPath, projectId }),
+  postContextMessage: (projectPath, projectId, fromAgent, message) =>
+    ipcRenderer.invoke('context:postMessage', { projectPath, projectId, fromAgent, message }),
 
   // File watcher
   watchProject: (dirPath) => ipcRenderer.invoke('files:watch', dirPath),
@@ -66,7 +68,8 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // Messages
-  readMessages: (projectPath) => ipcRenderer.invoke('context:readMessages', projectPath),
+  readMessages: (projectId) => ipcRenderer.invoke('context:readMessages', projectId),
+  clearMessages: (projectId) => ipcRenderer.invoke('context:clearMessages', projectId),
 
   // Swarm
   createSwarm: (opts) => ipcRenderer.invoke('swarm:create', opts),
@@ -87,19 +90,15 @@ contextBridge.exposeInMainWorld('api', {
   getProjectStructure: (projectPath) => ipcRenderer.invoke('search:structure', projectPath),
   getFileSummary: (filePath) => ipcRenderer.invoke('search:fileSummary', filePath),
 
-  // Tests
-  detectTests: (projectPath) => ipcRenderer.invoke('tests:detect', projectPath),
-  runTests: (projectPath) => ipcRenderer.invoke('tests:run', projectPath),
-  runTestFile: (projectPath, testFile) => ipcRenderer.invoke('tests:runFile', { projectPath, testFile }),
 
   // Audit
   getAuditEvents: (opts) => ipcRenderer.invoke('audit:getEvents', opts),
   getAllAuditEvents: (limit) => ipcRenderer.invoke('audit:getAll', limit),
 
   // Browser
-  saveScreenshot: (projectPath, dataUrl, filename) =>
-    ipcRenderer.invoke('browser:saveScreenshot', { projectPath, dataUrl, filename }),
-  listScreenshots: (projectPath) => ipcRenderer.invoke('browser:listScreenshots', projectPath),
+  saveScreenshot: (projectId, dataUrl, filename) =>
+    ipcRenderer.invoke('browser:saveScreenshot', { projectId, dataUrl, filename }),
+  listScreenshots: (projectId) => ipcRenderer.invoke('browser:listScreenshots', projectId),
 
 
   // Dialogs

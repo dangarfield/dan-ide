@@ -40,23 +40,9 @@ class ProjectManager {
       addedAt: new Date().toISOString(),
     };
 
-    // Initialize .dan-ide structure in project
+    // Create minimal .dan-ide dir in project (agent rules only)
     const danIdeDir = path.join(folderPath, '.dan-ide');
-    fs.mkdirSync(path.join(danIdeDir, 'memory'), { recursive: true });
-    fs.mkdirSync(path.join(danIdeDir, 'sessions'), { recursive: true });
-    fs.mkdirSync(path.join(danIdeDir, 'tasks'), { recursive: true });
-
-    // Create initial shared memory file
-    const sharedMemPath = path.join(danIdeDir, 'memory', 'SHARED.md');
-    if (!fs.existsSync(sharedMemPath)) {
-      fs.writeFileSync(sharedMemPath, `# Shared Project Memory\n\nThis file is shared across all AI agent sessions in this project.\nAgents should read this before starting work and update it with important findings.\n\n## Project Notes\n\n## Active Tasks\n\n## Decisions Made\n`);
-    }
-
-    // Create config
-    const configPath = path.join(danIdeDir, 'config.yaml');
-    if (!fs.existsSync(configPath)) {
-      fs.writeFileSync(configPath, `# Dan IDE project config\ndefault_cli: claude\nallowed_clis:\n  - claude\n  - kiro\n  - aider\n  - shell\n`);
-    }
+    fs.mkdirSync(danIdeDir, { recursive: true });
 
     this.projects.push(project);
     this._save();

@@ -2061,6 +2061,19 @@ body.resizing {
 .proto-status-label.generating { color: #f39c12; }
 .proto-status-label.serving { color: #2ecc71; }
 
+.proto-activity {
+  font-size: 11px;
+  color: #aaa;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: #1a1a2e;
+  transition: opacity 0.3s, color 0.3s;
+}
+.proto-activity.hidden { display: none; }
+.proto-activity.active { color: #3498db; }
+.proto-activity.transcribing { color: #f39c12; }
+.proto-activity.thinking { color: #9b59b6; }
+
 .proto-transcript-empty {
   color: #666;
   font-style: italic;
@@ -2222,6 +2235,20 @@ body.resizing {
   color: #e74c3c;
   border: 1px solid #e74c3c;
 }
+
+.proto-director-log {
+  padding: 8px 16px;
+  max-height: 180px;
+  overflow-y: auto;
+  border-bottom: 1px solid #2a2a3e;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.proto-log-entry { color: #888; }
+.proto-log-entry.proto-log-phase { color: #3498db; }
+.proto-log-entry.proto-log-subagent { color: #9b59b6; }
+.proto-log-time { color: #555; margin-right: 8px; }
 
 .proto-build-description {
   padding: 12px 16px;

@@ -416,6 +416,11 @@ app.whenReady().then(() => {
       mainWindow.webContents.send('livePrototype:subagent', info);
     }
   });
+  livePrototypeManager.on('activity', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('livePrototype:activity', info);
+    }
+  });
   livePrototypeManager.on('builderSession', (info) => {
     const session = sessionManager.sessions.get(info.sessionId);
     if (session) {

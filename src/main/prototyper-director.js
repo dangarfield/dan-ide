@@ -124,13 +124,14 @@ class PrototyperDirector extends EventEmitter {
     this.emit('status', { status: 'directing', phase: 'Gathering knowledge...' });
 
     try {
-      // Extract entities from both proposal and transcript
       const proposalEntities = this._extractEntities(proposal.description);
       const transcriptEntities = this._extractEntities(transcriptText || '');
       const allEntities = [...new Set([...proposalEntities, ...transcriptEntities])].slice(0, 15);
 
+      this.emit('subagent', { agent: 'knowledge', status: 'running', output: `Querying entities: ${allEntities.join(', ')}` });
+
       if (allEntities.length === 0 || !this._knowledgeBase) {
-        this.emit('subagent', { agent: 'knowledge', status: 'complete', result: null });
+        this.emit('subagent', { agent: 'knowledge', status: 'complete', output: 'No entities found — skipping knowledge lookup' });
         return null;
       }
 
@@ -142,19 +143,21 @@ class PrototyperDirector extends EventEmitter {
 
       if (result && result.data) {
         const text = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
-        this.emit('subagent', { agent: 'knowledge', status: 'complete', result: text.slice(0, 200) });
+        this.emit('subagent', { agent: 'knowledge', status: 'complete', output: text.slice(0, 300) });
         return text;
       }
-    } catch {}
+    } catch (err) {
+      this.emit('subagent', { agent: 'knowledge', status: 'failed', output: err.message || 'Query failed' });
+    }
 
-    this.emit('subagent', { agent: 'knowledge', status: 'complete', result: null });
+    this.emit('subagent', { agent: 'knowledge', status: 'complete', output: 'No knowledge data returned' });
     return null;
   }
 
   // ---- Subagent: Researcher ----
 
   async _generateSpec(proposal, transcriptText, clarifications) {
-    this.emit('subagent', { agent: 'researcher', status: 'running' });
+    this.emit('subagent', { agent: 'researcher', status: 'running', output: 'Generating detailed specification...' });
     this.emit('status', { status: 'directing', phase: 'Generating detailed spec...' });
 
     const prompt = loadPrompt('prototyper-researcher-system', {
@@ -168,25 +171,34 @@ class PrototyperDirector extends EventEmitter {
       const child = spawn('claude', ['--print'], { timeout: 120000 });
       this._subprocesses.push(child);
       let stdout = '';
+      let lastEmit = 0;
 
-      child.stdout.on('data', (d) => { stdout += d.toString(); });
+      child.stdout.on('data', (d) => {
+        stdout += d.toString();
+        const now = Date.now();
+        if (now - lastEmit > 2000) {
+          lastEmit = now;
+          const preview = stdout.trim().slice(-200).replace(/\n/g, ' ');
+          this.emit('subagent', { agent: 'researcher', status: 'running', output: `Writing... (${stdout.length} chars) — "${preview.slice(0, 80)}..."` });
+        }
+      });
       child.stderr.on('data', () => {});
 
       child.on('close', () => {
         this._subprocesses = this._subprocesses.filter(c => c !== child);
         const spec = stdout.trim();
         if (spec && spec.length > 100) {
-          this.emit('subagent', { agent: 'researcher', status: 'complete', result: `${spec.length} chars` });
+          this.emit('subagent', { agent: 'researcher', status: 'complete', output: `Spec complete: ${spec.length} chars` });
           resolve(spec);
         } else {
-          this.emit('subagent', { agent: 'researcher', status: 'failed' });
+          this.emit('subagent', { agent: 'researcher', status: 'failed', output: 'Spec too short or empty' });
           resolve(proposal.description);
         }
       });
 
-      child.on('error', () => {
+      child.on('error', (err) => {
         this._subprocesses = this._subprocesses.filter(c => c !== child);
-        this.emit('subagent', { agent: 'researcher', status: 'failed' });
+        this.emit('subagent', { agent: 'researcher', status: 'failed', output: `Error: ${err.message}` });
         resolve(proposal.description);
       });
 
@@ -239,8 +251,19 @@ class PrototyperDirector extends EventEmitter {
 
     this._builderSessionId = session.id;
 
+    let builderOutputLen = 0;
+    let lastBuilderEmit = 0;
     session.onData((data) => {
       this._detectServerUrl(data);
+      builderOutputLen += data.length;
+      const now = Date.now();
+      if (now - lastBuilderEmit > 3000) {
+        lastBuilderEmit = now;
+        const text = data.toString().replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
+        if (text.length > 5) {
+          this.emit('subagent', { agent: 'builder', status: 'running', output: `${text.slice(0, 120)}` });
+        }
+      }
     });
 
     session.onExit(() => {

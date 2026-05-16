@@ -192,6 +192,7 @@ class LivePrototypeManager extends EventEmitter {
 
     this._lastThinkTranscriptLen = transcriptText.length;
     this._thinkingActive = true;
+    this.emit('activity', { type: 'thinker-running', transcriptLen: transcriptText.length });
 
     // Query knowledge base for context
     let knowledgeContext = '';
@@ -221,10 +222,16 @@ class LivePrototypeManager extends EventEmitter {
     child.on('close', () => {
       this._thinkingActive = false;
       if (stdout.trim()) {
+        this.emit('activity', { type: 'thinker-complete' });
         this._parseThinkerResponse(stdout.trim());
+      } else {
+        this.emit('activity', { type: 'thinker-empty' });
       }
     });
-    child.on('error', () => { this._thinkingActive = false; });
+    child.on('error', (err) => {
+      this._thinkingActive = false;
+      this.emit('activity', { type: 'thinker-error', message: err.message });
+    });
     child.stdin.write(promptContent);
     child.stdin.end();
   }
@@ -299,8 +306,12 @@ class LivePrototypeManager extends EventEmitter {
       this.emit('error', err);
     });
 
-    this._transcription.on('connected', (info) => {
-      this.emit('connected', info);
+    this._transcription.on('started', (info) => {
+      this.emit('activity', { type: 'transcription-started', mode: info.mode });
+    });
+
+    this._transcription.on('activity', (info) => {
+      this.emit('activity', info);
     });
   }
 

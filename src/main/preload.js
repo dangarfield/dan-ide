@@ -163,6 +163,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('livePrototype:subagent', listener);
     return () => ipcRenderer.removeListener('livePrototype:subagent', listener);
   },
+  onLivePrototypeActivity: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('livePrototype:activity', listener);
+    return () => ipcRenderer.removeListener('livePrototype:activity', listener);
+  },
   onLivePrototypeThought: (callback) => {
     const listener = (_, data) => callback(data);
     ipcRenderer.on('livePrototype:thought', listener);

@@ -17,7 +17,7 @@
   let _audioContext = null;
   let _audioProcessor = null;
   let _activeTab = 'listening';
-  let _prototypeTabs = []; // { id, name, status, url }
+  let _prototypeTabs = []; // { id, name, status, url, log: [] }
 
   // ---- DOM Elements ----
   const tabBar = document.getElementById('prototype-tabs');
@@ -170,15 +170,18 @@
     const editedName = proposalName ? proposalName.value.trim() : null;
     const editedDescription = proposalDesc.value.trim();
 
+    if (_autoConfirmTimer) { clearTimeout(_autoConfirmTimer); _autoConfirmTimer = null; }
+
     // Create tab immediately in researching state
     const tempId = 'research-' + Date.now();
     const tab = {
       id: tempId,
       name: editedName || 'Prototype',
       status: 'researching',
-      researchMessage: 'Querying knowledge base...',
+      researchMessage: 'Director starting...',
       url: null,
       description: editedDescription || (_proposal ? _proposal.description : ''),
+      log: [{ time: Date.now(), message: 'Director: spawning subagents (knowledge + researcher)', type: 'phase' }],
     };
     _prototypeTabs.push(tab);
     _proposal = null;
@@ -225,6 +228,7 @@
 
   // ---- Dismiss Proposal ----
   async function dismissProposal() {
+    if (_autoConfirmTimer) { clearTimeout(_autoConfirmTimer); _autoConfirmTimer = null; }
     await window.api.livePrototypeDismiss();
     _proposal = null;
     updateUI();
@@ -253,6 +257,16 @@
     } else {
       IDE.showToast('Navigate to a page in Browser panel first');
     }
+  }
+
+  // ---- Director Log Helper ----
+  function logToActiveTab(message, type) {
+    if (_prototypeTabs.length === 0) return;
+    const tab = _prototypeTabs[_prototypeTabs.length - 1];
+    if (!tab.log) tab.log = [];
+    tab.log.push({ time: Date.now(), message, type: type || 'info' });
+    if (tab.log.length > 50) tab.log.shift();
+    if (_activeTab === tab.id) updateTabContent();
   }
 
   // ---- Tabs ----
@@ -337,6 +351,17 @@
           subagentHtml = `<div class="proto-subagents-bar">${badges}</div>`;
         }
 
+        // Director activity log
+        let logHtml = '';
+        if (pt.log && pt.log.length > 0) {
+          const entries = pt.log.map(entry => {
+            const t = new Date(entry.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const cls = entry.type === 'subagent' ? 'proto-log-subagent' : entry.type === 'phase' ? 'proto-log-phase' : '';
+            return `<div class="proto-log-entry ${cls}"><span class="proto-log-time">${t}</span>${entry.message}</div>`;
+          }).join('');
+          logHtml = `<div class="proto-director-log">${entries}</div>`;
+        }
+
         panel.innerHTML = `
           <div class="proto-build-bar">
             <span class="proto-build-status-dot ${dotClass}"></span>
@@ -345,6 +370,7 @@
             <span class="proto-build-url">${urlHtml}</span>
             ${stopBtnHtml}
           </div>
+          ${logHtml}
           <div class="proto-build-description">${pt.description || ''}</div>
         `;
         document.getElementById('prototype-panel').appendChild(panel);
@@ -560,10 +586,22 @@
     updateUI();
   });
 
+  let _autoConfirmTimer = null;
+
   window.api.onLivePrototypeProposal((proposal) => {
     _proposal = proposal;
     updateUI();
-    IDE.showToast('Prototype opportunity detected!');
+
+    // Auto-confirm after 5s countdown (user can dismiss to cancel)
+    if (proposal.source === 'thinking') {
+      IDE.showToast('Prototype detected — building in 5s (dismiss to cancel)');
+      if (_autoConfirmTimer) clearTimeout(_autoConfirmTimer);
+      _autoConfirmTimer = setTimeout(() => {
+        if (_proposal) confirmBuild();
+      }, 5000);
+    } else {
+      IDE.showToast('Prototype opportunity detected!');
+    }
   });
 
   window.api.onLivePrototypeServerReady((info) => {
@@ -597,13 +635,17 @@
       if (status.status === 'serving') {
         lastTab.status = 'live';
         if (status.serverUrl) lastTab.url = status.serverUrl;
+        logToActiveTab(`Server ready: ${status.serverUrl}`, 'phase');
       } else if (status.status === 'idle' || status.status === 'done') {
         if (lastTab.status !== 'live') lastTab.status = 'stopped';
+        logToActiveTab('Director finished', 'phase');
       } else if (status.status === 'building') {
         lastTab.status = 'building';
+        logToActiveTab(`Phase: ${status.phase || 'Building prototype...'}`, 'phase');
       } else if (status.status === 'directing') {
         lastTab.status = 'researching';
         lastTab.researchMessage = status.phase || 'Directing...';
+        logToActiveTab(`Director: ${status.phase || 'Orchestrating...'}`, 'phase');
       }
       updateTabContent();
     }
@@ -618,10 +660,72 @@
         lastTab.status = 'live';
         lastTab.url = info.url;
       }
+      const label = info.output || `${info.agent}: ${info.status}`;
+      logToActiveTab(`[${info.agent}] ${label}`, 'subagent');
       updateTabContent();
     }
   });
 
+  // Activity notifications (transcription, thinker, audio pipeline)
+  let _activityTimeout = null;
+  const activityEl = document.getElementById('prototype-activity-indicator');
+
+  window.api.onLivePrototypeActivity((activity) => {
+    if (!activityEl) return;
+
+    let label = '';
+    let cls = 'active';
+    switch (activity.type) {
+      case 'audio-received':
+        label = 'Audio streaming...';
+        cls = 'active';
+        break;
+      case 'transcribing':
+        label = `Transcribing (${activity.duration}s)...`;
+        cls = 'transcribing';
+        break;
+      case 'transcribed':
+        label = `Transcribed: "${activity.text}"`;
+        cls = 'active';
+        break;
+      case 'silence':
+        label = 'Silence detected';
+        cls = 'active';
+        break;
+      case 'thinker-running':
+        label = 'Thinker analysing...';
+        cls = 'thinking';
+        break;
+      case 'thinker-complete':
+        label = 'Thinker done';
+        cls = 'thinking';
+        break;
+      case 'thinker-empty':
+        label = 'Thinker: no insight yet';
+        cls = 'active';
+        break;
+      case 'thinker-error':
+        label = `Thinker error: ${activity.message || ''}`;
+        cls = 'active';
+        break;
+      case 'transcription-started':
+        label = `Transcription started (${activity.mode})`;
+        cls = 'active';
+        break;
+      default:
+        label = activity.type;
+        cls = 'active';
+    }
+
+    activityEl.textContent = label;
+    activityEl.className = `proto-activity ${cls}`;
+    activityEl.classList.remove('hidden');
+
+    if (_activityTimeout) clearTimeout(_activityTimeout);
+    _activityTimeout = setTimeout(() => {
+      activityEl.classList.add('hidden');
+    }, 8000);
+  });
 
   // ---- Init ----
   createStatusPill();

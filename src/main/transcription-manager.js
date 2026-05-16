@@ -93,6 +93,10 @@ class TranscriptionManager extends EventEmitter {
     if (!this._running) return;
     this._audioBuffer.push(Buffer.from(buffer));
     this._bufferBytes += buffer.byteLength;
+    // Notify UI that audio is being received
+    if (this._bufferBytes % (16000 * 2) < buffer.byteLength) {
+      this.emit('activity', { type: 'audio-received', bytes: this._bufferBytes });
+    }
   }
 
   _startWhisperLoop() {
@@ -119,6 +123,8 @@ class TranscriptionManager extends EventEmitter {
     }
 
     const wavPath = path.join(this._tmpDir, `chunk-${Date.now()}.wav`);
+    const durationSecs = (pcmData.length / (16000 * 2)).toFixed(1);
+    this.emit('activity', { type: 'transcribing', duration: durationSecs });
 
     try {
       this._writeWav(wavPath, pcmData, 16000, 1, 16);
@@ -133,11 +139,13 @@ class TranscriptionManager extends EventEmitter {
         this._transcript.push(chunk);
         this._trimTranscript();
         this.emit('transcript', chunk);
+        this.emit('activity', { type: 'transcribed', text: text.trim().slice(0, 50) });
+      } else {
+        this.emit('activity', { type: 'silence' });
       }
     } catch (err) {
       this.emit('error', { message: `Whisper error: ${err.message}` });
     } finally {
-      // Clean up temp file
       try { fs.unlinkSync(wavPath); } catch {}
       this._processing = false;
     }
@@ -145,7 +153,7 @@ class TranscriptionManager extends EventEmitter {
 
   _runWhisper(wavPath) {
     return new Promise((resolve, reject) => {
-      const model = this._settings.whisperModel || 'base';
+      const model = this._settings.whisperModel || 'small';
       const whisperBin = this._settings.whisperPath || 'whisper';
       const args = [
         wavPath,
@@ -154,6 +162,8 @@ class TranscriptionManager extends EventEmitter {
         '--output_format', 'txt',
         '--output_dir', this._tmpDir,
         '--fp16', 'False',
+        '--no_speech_threshold', '0.6',
+        '--condition_on_previous_text', 'False',
       ];
 
       const proc = spawn(whisperBin, args, {
